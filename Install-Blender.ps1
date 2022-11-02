@@ -50,34 +50,6 @@ function Set-IntuneAppLog {
     }
 }
 
-# Function to check for pending reboot on the machine
-function Test-PendingReboot {
-    # Adapted from <https://stackoverflow.com/questions/47867949/how-can-i-check-for-a-pending-reboot>
-    #   Originally adapted from https://gist.github.com/altrive/5329377
-    #   Originally based on <http://gallery.technet.microsoft.com/scriptcenter/Get-PendingReboot-Query-bdb79542>
-
-    # Check the registry locations for pending reboots
-    if (Get-ChildItem "HKLM:\Software\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending" -EA Ignore) { return $true }
-    if (Get-Item "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired" -EA Ignore) { return $true }
-    if (Get-ItemProperty "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager" -Name PendingFileRenameOperations -EA Ignore) { return $true } 
-    
-    # Check WMI for pending reboots
-    # Requires the Config Manager modules.
-    # TODO determine if AAD machines support the query below
-    #$util = [wmiclass]"\\.\root\ccm\clientsdk:CCM_ClientUtilities"
-    # WMI Query based on <https://social.technet.microsoft.com/Forums/Lync/en-US/df431875-6e73-4b57-9d7d-8c466977f684/trying-to-understand-invokewmimethod?forum=winserverpowershell>
-    #$wmiClientUtilities = Get-WmiObject -Namespace root\ccm\clientsdk -Class "CCM_ClientUtilities" 
-    #$status = $wmiClientUtilities.DetermineIfRebootPending()
-    #if (($null -eq $status) -and $status.RebootPending) {
-    #if (($null -eq $status) -and $status.RebootPending) {
-    #if (($null -eq $status) -and $status.RebootPending) {
-    #    return $true 
-    #}
-    #else {
-    #    return false
-    #}
-}
-
 # Installation arguments as a string literal
 $InstallArguments = @"
 /i blender.msi ALLUSERS=1 /qn
@@ -94,24 +66,6 @@ $ProgramName = "Blender"
 # Reference: https://docs.microsoft.com/en-us/windows/win32/fileio/naming-a-file#naming-conventions
 $ProgramVersion = "2.83"
 $ScriptName = (Split-Path -Path $PSCommandPath -Leaf) # Gets the name of the PS1 file being run. This is used in the Component column in logging
-
-# Needed if the installation will fail if a reboot is pending.
-if (Test-PendingReboot -eq $True) {
-    Write-Error -Message "A reboot is pending. Please perform a reboot and re-attempt the installation of $ProgramName."
-    Set-IntuneAppLog -LogMessage "{ERROR} A reboot is pending. Please perform a reboot and re-attempt the installation of $ProgramName." -LogComponent $ScriptName
-    exit -5  # Pending reboot
-}
-
-# Set the license variable using .NET API to specify "machine" as the target to enable persistence.
-# Adapted from ,https://trevorsullivan.net/2016/07/25/powershell-environment-variables/>
-try {
-    [System.Environment]::SetEnvironmentVariable("LSFORCEHOST", "license2.forest.usf.edu", [System.EnvironmentVariableTarget]::Machine)
-}
-catch {
-    Write-Error -Message "Error creating the system environment variable for licensing."
-    Set-IntuneAppLog -LogMessage "{ERROR} Error creating the system environment variable for licensing." -LogComponent $ScriptName
-    exit -6 # Issue creating license variable
-}
 
 # Install
 try {
