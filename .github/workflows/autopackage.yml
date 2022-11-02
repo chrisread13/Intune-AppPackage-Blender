@@ -1,0 +1,72 @@
+# This is a basic workflow to help you get started with Actions
+
+name: auto-packager
+
+# Controls when the workflow will run
+on:
+  # Triggers the workflow on push or pull request events but only for the main branch
+  #pull_request:
+   # branches: [ main ]
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+    inputs:
+      win32toolUrl:
+        description: The URL of the current Win32 Content Prep Tool.
+        required: true
+        default: https://github.com/microsoft/Microsoft-Win32-Content-Prep-Tool/raw/master/IntuneWinAppUtil.exe
+        type: string
+      installationScriptName:
+        description: The name of the installation file (without the ps1 extension)
+        required: true
+        default: Install-Blender
+        type: string
+# A workflow run is made up of one or more jobs that can run sequentially or in parallel
+jobs:
+  # This workflow contains a single job called "demo"
+  demo:
+    name: auto-package
+    # The type of runner that the job will run on (Windows Server 2022)
+    runs-on: windows-2022
+
+    # Steps represent a sequence of tasks that will be executed as part of the job
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - name: Checkout main branch
+        uses: actions/checkout@v2
+        with:
+          lfs: true
+
+      # Runs a single command using the runners shell
+      - name: Download the Win32 Content Prep Tool
+        shell: powershell
+        run: Start-BitsTransfer -Source ${{ github.event.inputs.win32toolUrl }} -Destination C:\IntuneWinAppUtil.exe
+
+      # Move the repo to a temporary location (future optimization needed)
+      - name: Move the repo
+        shell: powershell
+        run: Copy-Item -Path $env:GITHUB_WORKSPACE -Recurse -Destination C:\packaging
+
+      # Delete the unecessary GitHub files
+      - name: Delete the meta files
+        shell: powershell
+        run: Remove-Item -Path C:\packaging\.* -Recurse -Force
+      
+      # Delete the unecessary IntuneWin files
+      - name: Delete the meta files
+        shell: powershell
+        run: Remove-Item -Path C:\packaging\*.intunewin -Recurse -Force
+
+      # Create the package
+      - name: Create the intunewin package
+        shell: powershell
+        run: Start-Process -FilePath C:\IntuneWinAppUtil.exe -ArgumentList "-c ""C:\packaging""", "-o ""C:\package""", "-s ${{ github.event.inputs.installationScriptName }}.ps1", "-q" -Wait
+        #&C:\IntuneWinAppUtil.exe -c "C:\packaging" -o "C:\package" -s ${{ github.event.inputs.installationScriptName }}.ps1
+
+      # Upload the package
+      - name: Upload the intunewin
+        uses: actions/upload-artifact@v2
+        with:
+          name: ${{ github.event.inputs.installationScriptName }}.intunewin
+          path: C:\package\${{ github.event.inputs.installationScriptName }}.intunewin
+          #path: /package/${{ github.event.inputs.installationScriptName }}.intunewin
